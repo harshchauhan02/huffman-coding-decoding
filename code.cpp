@@ -60,117 +60,137 @@ typedef vector<vi> vvi;
 typedef vector<vl> vvl;
 // This constant can be avoided by explicitly
 // calculating height of Huffman Tree
-#define MAX_TREE_HT 100
-// C++(STL) program for Huffman Coding with STL 
-#include <bits/stdc++.h> 
-using namespace std; 
+#include "common.h"
+#include "bit_io.h"
+#include <vector>
+#include <map>
+#include <queue>
+#include <string>
+#include <iostream>
+#include <fstream>
 
-// A Huffman tree node 
-struct MinHeapNode { 
+#define DEFAULT_INFILE "test-files/hamlet-ascii.txt.huff"
+#define DEFAULT_OUTFILE "test-files/hamlet-ascii.txt.puff"
 
-	// One of the input characters 
-	char data; 
+struct huffmannode;
+using node_ptr = std::shared_ptr<huffmannode>;
+using struct_node_ptr = std::shared_ptr<struct huffmannode>;
 
-	// Frequency of the character 
-	unsigned freq; 
+using namespace ipd;
+std::map<char, std::string> bitcode;
+std::map<char, size_t> freq;
+struct huffmannode
+{
+    char c;
+    size_t freq;
+    node_ptr left, right;
 
-	// Left and right child 
-	MinHeapNode *left, *right; 
+    huffmannode(char c, size_t freq)
+    {
+        left = right = nullptr;
+        this->c = c;
+        this->freq = freq;
+    }
+};
+struct compare
+{
+    bool operator()(node_ptr left, node_ptr right)
+    {
+        return (left->freq > right->freq);
+    }
+};
 
-	MinHeapNode(char data, unsigned freq) 
+void storecodes(struct_node_ptr root, std::string str)
+{
+    if (root == nullptr)
+    {
+        return;
+    }
+    if (root->c != '#')
+        bitcode[root->c] = str;
+    storecodes(root->left, str + "0");
+    storecodes(root->right, str + "1");
+}
+void createHuffmantree()
+{
+    struct_node_ptr left, right, top;
+    std::priority_queue<node_ptr, std::vector<node_ptr>, compare> q;
 
-	{ 
+    for (auto v = freq.begin(); v != freq.end(); v++)
+    {
+        node_ptr newone = std::make_shared<huffmannode>(v->first, v->second);
+        q.push(newone);
+    }
+    while (q.size() != 1)
+    {
+        left = q.top();
+        q.pop();
+        right = q.top();
+        q.pop();
+        top = std::make_shared<huffmannode>('#', left->freq + right->freq);
+        top->left = left;
+        top->right = right;
+        q.push(top);
+    }
+    storecodes(q.top(), "");
+}
+void buildfreqtable(std::istream &in)
+{
+    char c;
+    while (in.read(&c, 1))
+    {
+        freq[c]++;
+    }
+}
+void writecodes(std::istream &in, bostream &out)
+{
+    char c;
+    in.clear();
+    in.seekg(0, std::ios::beg);
+    while (in.read(&c, 1))
+    {
+        std::string code = bitcode[c];
+        for (int i = 0; i < code.size(); i++)
+        {
+            out.write_bits(code.at(i), 8);
+        }
+    }
+}
+void writefreqtabletofile(bostream &out)
+{
+    for (auto v = freq.begin(); v != freq.end(); v++)
+    {
+        char ch = v->first;
+        std::string f = std::to_string(v->second);
 
-		left = right = NULL; 
-		this->data = data; 
-		this->freq = freq; 
-	} 
-}; 
+        out.write_bits(ch, 8);
+        out.write_bits(':', 8);
+        for (int i = 0; i < f.size(); i++)
+        {
+            out.write_bits(f.at(i), 8);
+        }
+        out.write_bits(';', 8);
+    }
+    out.write_bits('#', 8);
+}
+int main(int argc, const char *argv[])
+{
+    const char *infile, *outfile;
 
-// For comparison of 
-// two heap nodes (needed in min heap) 
-struct compare { 
+    get_file_names(argc, argv, infile, outfile,
+                   DEFAULT_INFILE, DEFAULT_OUTFILE);
 
-	bool operator()(MinHeapNode* l, MinHeapNode* r) 
+    std::ifstream in(infile);
+    assert_good(in, argv);
 
-	{ 
-		return (l->freq > r->freq); 
-	} 
-}; 
+    bofstream out(outfile);
+    assert_good(out, argv);
 
-// Prints huffman codes from 
-// the root of Huffman Tree. 
-void printCodes(struct MinHeapNode* root, string str) 
-{ 
+    buildfreqtable(in);
+    writefreqtabletofile(out);
 
-	if (!root) 
-		return; 
+    createHuffmantree();
+    writecodes(in, out);
 
-	if (root->data != '$') 
-		cout << root->data << ": " << str << "\n"; 
-
-	printCodes(root->left, str + "0"); 
-	printCodes(root->right, str + "1"); 
-} 
-
-// The main function that builds a Huffman Tree and 
-// print codes by traversing the built Huffman Tree 
-void HuffmanCodes(char data[], int freq[], int size) 
-{ 
-	struct MinHeapNode *left, *right, *top; 
-
-	// Create a min heap & inserts all characters of data[] 
-	priority_queue<MinHeapNode*, vector<MinHeapNode*>, 
-				compare> 
-		minHeap; 
-
-	for (int i = 0; i < size; ++i) 
-		minHeap.push(new MinHeapNode(data[i], freq[i])); 
-
-	// Iterate while size of heap doesn't become 1 
-	while (minHeap.size() != 1) { 
-
-		// Extract the two minimum 
-		// freq items from min heap 
-		left = minHeap.top(); 
-		minHeap.pop(); 
-
-		right = minHeap.top(); 
-		minHeap.pop(); 
-
-		// Create a new internal node with 
-		// frequency equal to the sum of the 
-		// two nodes frequencies. Make the 
-		// two extracted node as left and right children 
-		// of this new node. Add this node 
-		// to the min heap '$' is a special value 
-		// for internal nodes, not used 
-		top = new MinHeapNode('$', 
-							left->freq + right->freq); 
-
-		top->left = left; 
-		top->right = right; 
-
-		minHeap.push(top); 
-	} 
-
-	// Print Huffman codes using 
-	// the Huffman tree built above 
-	printCodes(minHeap.top(), ""); 
-} 
-
-// Driver Code 
-int main() 
-{ 
-
-	char arr[] = { 'a', 'b', 'c', 'd', 'e', 'f' }; 
-	int freq[] = { 5, 9, 12, 13, 16, 45 }; 
-
-	int size = sizeof(arr) / sizeof(arr[0]); 
-
-	HuffmanCodes(arr, freq, size); 
-
-	return 0; 
-} 
-
-// This code is contributed by Aditya Goel
+    return 0;
+}
